@@ -1,3 +1,11 @@
+from kafka import KafkaConsumer
+from kafka.structs import TopicPartition
+from kafka.errors import NoBrokersAvailable, KafkaError
+from kafka.common import OffsetAndMetadata
+from kafka.admin import KafkaAdminClient, NewTopic
+from kafka.streams import KafkaStreams
+from kafka.streams.state import Stores
+from kafka.streams.kstream import KStream
 from confluent_kafka import Consumer
 from time import sleep
 
@@ -23,3 +31,6 @@ while(True):
 
     for r in ret:
         print("{} --> {}".format(r.topic(),str(r.value(),"utf8")))
+
+
+
