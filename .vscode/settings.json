@@ -1,0 +1,18 @@
+{
+    "java.project.referencedLibraries": [
+        "lib/**/*.jar",
+        "/home/jimlibo/Downloads/connect-file-3.3.1.jar",
+        "/home/jimlibo/Downloads/zstd-jni-1.5.2-1.jar",
+        "/home/jimlibo/Downloads/snappy-java-1.1.8.4.jar",
+        "/home/jimlibo/Downloads/slf4j-api-1.7.36.jar",
+        "/home/jimlibo/Downloads/lz4-java-1.8.0.jar",
+        "/home/jimlibo/Downloads/kafka-clients-3.3.1.jar",
+        "/home/jimlibo/Downloads/javax.ws.rs-api-2.1.1.jar",
+        "/home/jimlibo/Downloads/connect-api-3.3.1.jar",
+        "/home/jimlibo/Downloads/rocksdbjni-6.29.4.1.jar",
+        "/home/jimlibo/Downloads/kafka-streams-3.3.1.jar",
+        "/home/jimlibo/Downloads/jackson-databind-2.13.3.jar",
+        "/home/jimlibo/Downloads/jackson-core-2.13.3.jar",
+        "/home/jimlibo/Downloads/jackson-annotations-2.13.3.jar"
+    ]
+}

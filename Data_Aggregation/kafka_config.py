@@ -1,11 +1,11 @@
-from kafka import KafkaConsumer
-from kafka.structs import TopicPartition
-from kafka.errors import NoBrokersAvailable, KafkaError
-from kafka.common import OffsetAndMetadata
-from kafka.admin import KafkaAdminClient, NewTopic
-from kafka.streams import KafkaStreams
-from kafka.streams.state import Stores
-from kafka.streams.kstream import KStream
+# from kafka import KafkaConsumer
+# from kafka.structs import TopicPartition
+# from kafka.errors import NoBrokersAvailable, KafkaError
+# from kafka.common import OffsetAndMetadata
+# from kafka.admin import KafkaAdminClient, NewTopic
+# from kafka.streams import KafkaStreams
+# from kafka.streams.state import Stores
+# from kafka.streams.kstream import KStream
 from confluent_kafka import Consumer
 from time import sleep
 
@@ -17,8 +17,12 @@ conf = {'bootstrap.servers': 'pkc-lz6r3.northeurope.azure.confluent.cloud:9092',
         'sasl.password' : 'iPaie4dfn3uUM/NhmHGnMlv2mIcOr+wIBIO9xuLJgBf+VZaZFldaBkcexvEpRXpK'
     }
 
+local_conf = {
+    'bootstrap.servers': 'localhost:9092',
+    'group.id': 'mygroup'
+}
 
-cons = Consumer(conf)
+cons = Consumer(local_conf)
 
 
 cons.subscribe(["TH1","Etot","HVAC1","W1"])

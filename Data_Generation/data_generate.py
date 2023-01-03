@@ -99,15 +99,10 @@ if __name__ == "__main__":
     headers_to_test = ["TH1","HVAC1","Etot","W1"]
     
     # Producer Configuration
-    conf = {'bootstrap.servers': 'pkc-lz6r3.northeurope.azure.confluent.cloud:9092',
-        'sasl.mechanism' : 'PLAIN',
-        'security.protocol': 'SASL_SSL',
-        'sasl.username' : '6GF6RHWXMFQTZ624',
-        'sasl.password' : 'iPaie4dfn3uUM/NhmHGnMlv2mIcOr+wIBIO9xuLJgBf+VZaZFldaBkcexvEpRXpK'
-    }
+    local_conf = {'bootstrap.servers': 'localhost:9092'}
 
     # connect with the kafka broker as a producer
-    producer = Producer(conf)
+    producer = Producer(local_conf)
 
     producer.flush()
 
