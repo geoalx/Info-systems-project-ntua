@@ -1,4 +1,4 @@
-#! /bin/bash
+#!/bin/bash
 
 # run the producer script to generate data and send them to message broker
 python3 data_generate.py

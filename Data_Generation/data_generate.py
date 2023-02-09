@@ -22,20 +22,20 @@ class Sensor:
         self.late_count = 0    # used to find when to send late-event-data
 
     def generate(self):
-        to_print = "{} | {}".format(self.time.strftime("%Y-%m-%d %H:%M"),round(self.value,2))
+        to_print = "{}|{}".format(self.time.strftime("%Y-%m-%d %H:%M"),round(self.value,2))
         self.time += self.interval
         self.value = float(F.random.randrange(self.val_range[0]*100, self.val_range[1]*100)/100)
 
         if self.late_count % 20 == 0 and self.late_count != 0 and self.late:   # add late event from 2 days before
             value_2 = float(F.random.randrange(self.val_range[0]*100, self.val_range[1]*100)/100)
             late_time = self.time - timedelta(days=2)
-            to_print_2 = "{} | {}".format(late_time.strftime("%Y-%m-%d %H:%M"),round(value_2,2))
+            to_print_2 = "{}|{}".format(late_time.strftime("%Y-%m-%d %H:%M"),round(value_2,2))
             to_print += '$' + to_print_2
 
         if self.late_count % 120 == 0 and self.late_count != 0  and self.late:  # add late event from 10 days before
             value_10 = float(F.random.randrange(self.val_range[0]*100, self.val_range[1]*100)/100)
             late_time = self.time - timedelta(days=10)
-            to_print_10 = "{} | {}".format(late_time.strftime("%Y-%m-%d %H:%M"),round(value_10,2))   
+            to_print_10 = "{}|{}".format(late_time.strftime("%Y-%m-%d %H:%M"),round(value_10,2))   
             to_print += '$' + to_print_10
 
         
@@ -58,7 +58,7 @@ class SumSensor(Sensor):
 
 
     def generate(self):
-        to_print = "{} | {}".format(self.time.strftime("%Y-%m-%d %H:%M"),round(self.value,2))
+        to_print = "{}|{}".format(self.time.strftime("%Y-%m-%d %H:%M"),round(self.value,2))
         self.value += float(F.random.randrange(self.val_range[0]*100, self.val_range[1]*100)/100)
         self.time += self.interval
         return to_print
