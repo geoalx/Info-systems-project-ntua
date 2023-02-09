@@ -72,7 +72,7 @@ public class App {
             }
             Instant time_parse = Instant.ofEpochMilli(date.getTime());
             System.out.println("AFter time parsing");
-            Point point = Point.measurement("TH1").addField("value",parts[1]).time(Instant.now(),WritePrecision.MS);
+            Point point = Point.measurement("TH1").addField("value",Float.parseFloat(parts[1])).time(Instant.now(),WritePrecision.MS);
             writeApi.writePoint("info_sys", "info_sys", point);         
             });
         System.out.println("Running3");
