@@ -25,13 +25,16 @@ sleep 15
 # create topics in kafka container
 echo -e "${GREEN}Creating Topics in Kafka Container...${NC}"
 
-docker exec -it kafka kafka-topics.sh --create  --if-not-exists --bootstrap-server localhost:9092 --replication-factor 1 --partitions 1 --topic TH1
-
+docker exec -it kafka kafka-topics.sh --create --if-not-exists --bootstrap-server localhost:9092 --replication-factor 1 --partitions 1 --topic TH1
+docker exec -it kafka kafka-topics.sh --create --if-not-exists --bootstrap-server localhost:9092 --replication-factor 1 --partitions 1 --topic TH2
 docker exec -it kafka kafka-topics.sh --create --if-not-exists --bootstrap-server localhost:9092 --replication-factor 1 --partitions 1 --topic HVAC1
-
+docker exec -it kafka kafka-topics.sh --create --if-not-exists --bootstrap-server localhost:9092 --replication-factor 1 --partitions 1 --topic HVAC2
+docker exec -it kafka kafka-topics.sh --create --if-not-exists --bootstrap-server localhost:9092 --replication-factor 1 --partitions 1 --topic MiAC1
+docker exec -it kafka kafka-topics.sh --create --if-not-exists --bootstrap-server localhost:9092 --replication-factor 1 --partitions 1 --topic MiAC2
 docker exec -it kafka kafka-topics.sh --create --if-not-exists --bootstrap-server localhost:9092 --replication-factor 1 --partitions 1 --topic Etot
-
 docker exec -it kafka kafka-topics.sh --create --if-not-exists --bootstrap-server localhost:9092 --replication-factor 1 --partitions 1 --topic W1
+docker exec -it kafka kafka-topics.sh --create --if-not-exists --bootstrap-server localhost:9092 --replication-factor 1 --partitions 1 --topic Wtot
+docker exec -it kafka kafka-topics.sh --create --if-not-exists --bootstrap-server localhost:9092 --replication-factor 1 --partitions 1 --topic Mov1
 
 # docker clean-up
 if "$cleanup"; then
