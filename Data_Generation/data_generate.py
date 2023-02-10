@@ -113,9 +113,7 @@ if __name__ == "__main__":
                 temp = sensor.generate()
                 
                 f.write(temp + "\n")
-
-                if(sensor.name in headers_to_test):
-                    for t in temp.split("$"):  # split in $ to find posible late events
-                        # send the generated data to the appropriate kafka broker topic (channel)
-                        producer.produce(topic=sensor.name, value=str(t))  
-                        producer.flush()
+                for t in temp.split("$"):  # split in $ to find posible late events
+                    # send the generated data to the appropriate kafka broker topic (channel)
+                    producer.produce(topic=sensor.name, value=str(t))  
+                    producer.flush()
