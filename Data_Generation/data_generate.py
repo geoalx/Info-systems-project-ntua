@@ -115,5 +115,5 @@ if __name__ == "__main__":
                 f.write(temp + "\n")
                 for t in temp.split("$"):  # split in $ to find posible late events
                     # send the generated data to the appropriate kafka broker topic (channel)
-                    producer.produce(topic=sensor.name, value=str(t))  
+                    producer.produce(topic=sensor.name, key="dummy", value=str(t))  
                     producer.flush()
