@@ -36,18 +36,22 @@ import java.util.Properties;
 @SuppressWarnings("all")
 
 public class App {
+
+    public static double peos = 0.0d;
+    public static int count = 0;
+    public static int count2 = 0;
     public static void main(String[] args) {
         Properties props = new Properties();
         // set the stream configurations
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, "streams-example");
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
-        props.put(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG, CustomTimestampExtractor.class.getName());
+        //props.put(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG, CustomTimestampExtractor.class.getName());
         props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
         props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
         
         InfluxDBClient client = InfluxDBClientFactory.create("http://localhost:8086", 
-        "wMqzuEl-JogXj1IrnQlwUDy9Gbv_15yvm5OQ8ua-qRvXAFdjEuJMEJ8rBEx2BqDQ6uoZ09ZfZNamhuZOrbpB6g==".toCharArray(),
-        "info_sys",
+        "0Mi6wJsMXPSk9l0QKOfdGC2gYyu-KskcjmYDUInBZlfGLIvr1AS-V0SB7OtvP3nqv8tjdR3fVifFH2CsCvH23g==".toCharArray(),
+        "info_sys_ntua",
         "info_sys_bucket"
         );
 
@@ -58,20 +62,26 @@ public class App {
         final Serde<Long> longSerde = Serdes.Long();
         // define the input stream and subscribe to it
         KStream<String, String> inputStreamTH1 = builder.stream("TH1", Consumed.with(stringSerde, stringSerde).withTimestampExtractor(new CustomTimestampExtractor()));
+        
+
+
         // inputStreamTH1.groupByKey().;
         inputStreamTH1.mapValues(v -> v.split("\\|")[1]).peek((k,v)->{
             System.out.println("Received message: key = " + k + " value = " + v);
         }).groupByKey(Grouped.with(Serdes.String(), Serdes.String())).windowedBy(
-            SlidingWindows.ofTimeDifferenceAndGrace(Duration.ofDays(1), Duration.ofSeconds(5)))
-            .aggregate(
-            () ->  0.0D,
-            (key, value, av) -> av + Double.parseDouble(value),
-            Materialized.with(Serdes.String(), Serdes.Double())
-            )
+            TimeWindows.of(Duration.ofSeconds(10)))
+            .count()
+            // .aggregate(
+            // () ->  0.0D,
+            // (key, value, av) -> {peos += Double.parseDouble(value);count++;System.out.println(count); return peos;},
+            // Materialized.with(Serdes.String(), Serdes.Double())
+            // )
             .suppress(
                 Suppressed.untilWindowCloses(Suppressed.BufferConfig.unbounded())).toStream().map(
                     (k,v) -> KeyValue.pair(k.key().toString(), v.toString())).peek((k,v) -> {
                         System.out.println("Aggregated key=" + k + ", and aggregated value=" + v);
+                        count2++;
+                        System.out.println(count2 + " " +v);
                     });
 
         KafkaStreams streams = new KafkaStreams(builder.build(), props);
@@ -104,7 +114,7 @@ public class App {
                 System.out.print("Error occured during date parsing");
             }
             
-            influxapi.writeRecord("info_sys_bucket", "info_sys", WritePrecision.MS, measurement+" value="+parts[1]+" "+Timestamp.valueOf(date).getTime());
+            influxapi.writeRecord("info_sys_bucket", "info_sys_ntua", WritePrecision.MS, measurement+" value="+parts[1]+" "+Timestamp.valueOf(date).getTime());
 
     }
 }

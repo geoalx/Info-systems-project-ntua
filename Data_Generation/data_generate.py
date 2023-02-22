@@ -107,7 +107,7 @@ if __name__ == "__main__":
     producer.flush()
 
     for i in tqdm(range(125)):
-        sleep(0.5)
+        sleep(1)
         for sensor in sensors:
             with open("{}.txt".format(sensor.name), "a") as f:
                 temp = sensor.generate()
