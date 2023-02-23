@@ -20,6 +20,8 @@ public class CustomTimestampExtractor implements TimestampExtractor {
             System.out.print("Error occured during date parsing");
         }
 
-        return Timestamp.valueOf(newdate).getTime();
+        long temp = Timestamp.valueOf(newdate).getTime();
+
+        return temp + 7200000;
     }
 }

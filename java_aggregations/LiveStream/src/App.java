@@ -40,12 +40,13 @@ public class App {
     public static double peos = 0.0d;
     public static int count = 0;
     public static int count2 = 0;
+    public static int rcv_msg_count = 0;
     public static void main(String[] args) {
         Properties props = new Properties();
         // set the stream configurations
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, "streams-example");
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
-        //props.put(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG, CustomTimestampExtractor.class.getName());
+        props.put(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG, CustomTimestampExtractor.class.getName());
         props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
         props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
         
@@ -61,28 +62,38 @@ public class App {
         final Serde<String> stringSerde = Serdes.String();
         final Serde<Long> longSerde = Serdes.Long();
         // define the input stream and subscribe to it
-        KStream<String, String> inputStreamTH1 = builder.stream("TH1", Consumed.with(stringSerde, stringSerde).withTimestampExtractor(new CustomTimestampExtractor()));
+        KStream<String, String> inputStreamTH1 = builder.stream("TH1", Consumed.with(stringSerde, stringSerde));
         
 
 
         // inputStreamTH1.groupByKey().;
-        inputStreamTH1.mapValues(v -> v.split("\\|")[1]).peek((k,v)->{
-            System.out.println("Received message: key = " + k + " value = " + v);
-        }).groupByKey(Grouped.with(Serdes.String(), Serdes.String())).windowedBy(
-            TimeWindows.of(Duration.ofSeconds(10)))
-            .count()
-            // .aggregate(
-            // () ->  0.0D,
-            // (key, value, av) -> {peos += Double.parseDouble(value);count++;System.out.println(count); return peos;},
-            // Materialized.with(Serdes.String(), Serdes.Double())
-            // )
-            .suppress(
-                Suppressed.untilWindowCloses(Suppressed.BufferConfig.unbounded())).toStream().map(
-                    (k,v) -> KeyValue.pair(k.key().toString(), v.toString())).peek((k,v) -> {
-                        System.out.println("Aggregated key=" + k + ", and aggregated value=" + v);
-                        count2++;
-                        System.out.println(count2 + " " +v);
-                    });
+        inputStreamTH1
+        .mapValues(v -> v.split("\\|")[1])
+        .peek((k,v)->{
+            System.out.println("Received message: key = " + k + " value = " + v + " count = " + rcv_msg_count);
+            rcv_msg_count++;
+        })
+        .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
+        //.windowedBy(TimeWindows.ofSizeAndGrace(Duration.ofSeconds(10), Duration.ofSeconds(10)).advanceBy(Duration.ofSeconds(10)))
+        .windowedBy(TimeWindows.ofSizeAndGrace(Duration.ofDays(1), Duration.ofSeconds(10)).advanceBy(Duration.ofDays(1)))
+        //.count()
+        .aggregate(
+        () ->  0.0D,
+        //(key, value, av) -> {peos += Double.parseDouble(value);count++;System.out.println(count); return peos;},
+        (key,value,av) -> adder(av,value),
+        Materialized.with(Serdes.String(), Serdes.Double())
+        )
+        // .suppress(
+        //     //Suppressed.untilWindowCloses(Suppressed.BufferConfig.unbounded()))
+        //     Suppressed.untilTimeLimit(Duration.ofSeconds(10), Suppressed.BufferConfig.unbounded()))
+        .toStream()
+        .map(
+            (k,v) -> KeyValue.pair(k.key().toString(), v.toString()))
+        .peek((k,v) -> {
+            System.out.println("Aggregated key=" + k + ", and aggregated value=" + v);
+            count2++;
+            System.out.println(count2 + " " +v);
+        });
 
         KafkaStreams streams = new KafkaStreams(builder.build(), props);
         streams.start();

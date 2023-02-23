@@ -1,8 +1,9 @@
 from faker import Faker
 from datetime import datetime,timedelta
-from time import sleep
+from time import sleep,time
 from tqdm import tqdm
 from confluent_kafka import Producer
+from datetime import datetime
 
 F = Faker()
 
@@ -106,13 +107,13 @@ if __name__ == "__main__":
 
     producer.flush()
 
-    for i in tqdm(range(125)):
+    for i in tqdm(range(30)):
         sleep(1)
         for sensor in sensors:
             with open("{}.txt".format(sensor.name), "a") as f:
                 temp = sensor.generate()
                 
-                f.write(temp + "\n")
+                f.write("{}\t|||\t{}\n".format(temp, datetime.now().strftime("%H:%M:%S")))
                 for t in temp.split("$"):  # split in $ to find posible late events
                     # send the generated data to the appropriate kafka broker topic (channel)
                     producer.produce(topic=sensor.name, key="dummy", value=str(t))  
