@@ -36,6 +36,32 @@ import java.util.Properties;
 @SuppressWarnings("all")
 
 public class App {
+    class MyCountAndSum{
+        private double sum_value;
+        private long count_value;
+
+        // local class for aggregagtions that need average
+    //     public MyCountAndSum(long c, double s) {
+    //         sum_value = s;
+    //         count_value = c;
+    //     }
+
+    //     public long getCount() {
+    //         return count_value;
+    //     }
+
+    //     public double getSum() {
+    //         return sum_value;
+    //     }
+
+    //     public void increment_counter() {
+    //         count_value++;
+    //     }
+    //     public void add_value(double new_val) {
+    //         sum_value += new_val;
+    //     }
+        
+    // };
 
     public static double peos = 0.0d;
     public static int count = 0;
@@ -63,7 +89,13 @@ public class App {
         final Serde<Long> longSerde = Serdes.Long();
         // define the input stream and subscribe to it
         KStream<String, String> inputStreamTH1 = builder.stream("TH1", Consumed.with(stringSerde, stringSerde));
-        
+        KStream<String, String> inputStreamTH2 = builder.stream("TH2", Consumed.with(stringSerde, stringSerde));
+        KStream<String, String> inputStreamHVAC1 = builder.stream("HVAC1", Consumed.with(stringSerde, stringSerde));
+        KStream<String, String> inputStreamHVAC2 = builder.stream("HVAC2", Consumed.with(stringSerde, stringSerde));
+        KStream<String, String> inputStreamMiAC1 = builder.stream("MiAC1", Consumed.with(stringSerde, stringSerde));
+        KStream<String, String> inputStreamMiAC2 = builder.stream("MiAC2", Consumed.with(stringSerde, stringSerde));
+        KStream<String, String> inputStreamW1 = builder.stream("W1", Consumed.with(stringSerde, stringSerde));
+
 
 
         // inputStreamTH1.groupByKey().;
@@ -78,9 +110,9 @@ public class App {
         .windowedBy(TimeWindows.ofSizeAndGrace(Duration.ofDays(1), Duration.ofSeconds(10)).advanceBy(Duration.ofDays(1)))
         //.count()
         .aggregate(
-        () ->  0.0D,
+        () ->  0.0,
         //(key, value, av) -> {peos += Double.parseDouble(value);count++;System.out.println(count); return peos;},
-        (key,value,av) -> adder(av,value),
+        (key,value,av) -> adder(av, value),
         Materialized.with(Serdes.String(), Serdes.Double())
         )
         // .suppress(
@@ -94,6 +126,133 @@ public class App {
             count2++;
             System.out.println(count2 + " " +v);
         });
+
+        inputStreamTH2
+        .mapValues(v -> v.split("\\|")[1])
+        .peek((k,v)->{
+            System.out.println("Received message: key = " + k + " value = " + v + " count = " + rcv_msg_count);
+            rcv_msg_count++;
+        })
+        .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
+        .windowedBy(TimeWindows.ofSizeAndGrace(Duration.ofDays(1), Duration.ofSeconds(10)).advanceBy(Duration.ofDays(1)))
+        .aggregate(
+        () ->  0.0D,
+        (key,value,av) -> adder(av,value),
+        Materialized.with(Serdes.String(), Serdes.Double())
+        ).toStream()
+        .map(
+            (k,v) -> KeyValue.pair(k.key().toString(), v.toString()))
+        .peek((k,v) -> {
+            System.out.println("Aggregated key=" + k + ", and aggregated value=" + v);
+            count2++;
+            System.out.println(count2 + " " +v);
+        });
+
+        inputStreamHVAC1
+        .mapValues(v -> v.split("\\|")[1])
+        .peek((k,v)->{
+            System.out.println("Received message: key = " + k + " value = " + v + " count = " + rcv_msg_count);
+            rcv_msg_count++;
+        })
+        .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
+        .windowedBy(TimeWindows.ofSizeAndGrace(Duration.ofDays(1), Duration.ofSeconds(10)).advanceBy(Duration.ofDays(1)))
+        .aggregate(
+        () ->  0.0D,
+        (key,value,av) -> adder(av,value),
+        Materialized.with(Serdes.String(), Serdes.Double())
+        ).toStream()
+        .map(
+            (k,v) -> KeyValue.pair(k.key().toString(), v.toString()))
+        .peek((k,v) -> {
+            System.out.println("Aggregated key=" + k + ", and aggregated value=" + v);
+            count2++;
+            System.out.println(count2 + " " +v);
+        });
+
+        inputStreamHVAC2
+        .mapValues(v -> v.split("\\|")[1])
+        .peek((k,v)->{
+            System.out.println("Received message: key = " + k + " value = " + v + " count = " + rcv_msg_count);
+            rcv_msg_count++;
+        })
+        .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
+        .windowedBy(TimeWindows.ofSizeAndGrace(Duration.ofDays(1), Duration.ofSeconds(10)).advanceBy(Duration.ofDays(1)))
+        .aggregate(
+        () ->  0.0D,
+        (key,value,av) -> adder(av,value),
+        Materialized.with(Serdes.String(), Serdes.Double())
+        ).toStream()
+        .map(
+            (k,v) -> KeyValue.pair(k.key().toString(), v.toString()))
+        .peek((k,v) -> {
+            System.out.println("Aggregated key=" + k + ", and aggregated value=" + v);
+            count2++;
+            System.out.println(count2 + " " +v);
+        });
+
+        inputStreamMiAC1
+        .mapValues(v -> v.split("\\|")[1])
+        .peek((k,v)->{
+            System.out.println("Received message: key = " + k + " value = " + v + " count = " + rcv_msg_count);
+            rcv_msg_count++;
+        })
+        .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
+        .windowedBy(TimeWindows.ofSizeAndGrace(Duration.ofDays(1), Duration.ofSeconds(10)).advanceBy(Duration.ofDays(1)))
+        .aggregate(
+        () ->  0.0D,
+        (key,value,av) -> adder(av,value),
+        Materialized.with(Serdes.String(), Serdes.Double())
+        ).toStream()
+        .map(
+            (k,v) -> KeyValue.pair(k.key().toString(), v.toString()))
+        .peek((k,v) -> {
+            System.out.println("Aggregated key=" + k + ", and aggregated value=" + v);
+            count2++;
+            System.out.println(count2 + " " +v);
+        });
+
+        inputStreamMiAC2
+        .mapValues(v -> v.split("\\|")[1])
+        .peek((k,v)->{
+            System.out.println("Received message: key = " + k + " value = " + v + " count = " + rcv_msg_count);
+            rcv_msg_count++;
+        })
+        .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
+        .windowedBy(TimeWindows.ofSizeAndGrace(Duration.ofDays(1), Duration.ofSeconds(10)).advanceBy(Duration.ofDays(1)))
+        .aggregate(
+        () ->  0.0D,
+        (key,value,av) -> adder(av,value),
+        Materialized.with(Serdes.String(), Serdes.Double())
+        ).toStream()
+        .map(
+            (k,v) -> KeyValue.pair(k.key().toString(), v.toString()))
+        .peek((k,v) -> {
+            System.out.println("Aggregated key=" + k + ", and aggregated value=" + v);
+            count2++;
+            System.out.println(count2 + " " +v);
+        });
+
+        inputStreamW1
+        .mapValues(v -> v.split("\\|")[1])
+        .peek((k,v)->{
+            System.out.println("Received message: key = " + k + " value = " + v + " count = " + rcv_msg_count);
+            rcv_msg_count++;
+        })
+        .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
+        .windowedBy(TimeWindows.ofSizeAndGrace(Duration.ofDays(1), Duration.ofSeconds(10)).advanceBy(Duration.ofDays(1)))
+        .aggregate(
+        () ->  0.0D,
+        (key,value,av) -> adder(av,value),
+        Materialized.with(Serdes.String(), Serdes.Double())
+        ).toStream()
+        .map(
+            (k,v) -> KeyValue.pair(k.key().toString(), v.toString()))
+        .peek((k,v) -> {
+            System.out.println("Aggregated key=" + k + ", and aggregated value=" + v);
+            count2++;
+            System.out.println(count2 + " " +v);
+        });
+
 
         KafkaStreams streams = new KafkaStreams(builder.build(), props);
         streams.start();
