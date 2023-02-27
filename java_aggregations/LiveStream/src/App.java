@@ -36,11 +36,11 @@ import java.util.Properties;
 @SuppressWarnings("all")
 
 public class App {
-    class MyCountAndSum{
-        private double sum_value;
-        private long count_value;
+    // class MyCountAndSum{
+    //     private double sum_value;
+    //     private long count_value;
 
-        // local class for aggregagtions that need average
+    //     local class for aggregagtions that need average
     //     public MyCountAndSum(long c, double s) {
     //         sum_value = s;
     //         count_value = c;
@@ -110,7 +110,7 @@ public class App {
         .windowedBy(TimeWindows.ofSizeAndGrace(Duration.ofDays(1), Duration.ofSeconds(10)).advanceBy(Duration.ofDays(1)))
         //.count()
         .aggregate(
-        () ->  0.0,
+        () ->  0.0D,
         //(key, value, av) -> {peos += Double.parseDouble(value);count++;System.out.println(count); return peos;},
         (key,value,av) -> adder(av, value),
         Materialized.with(Serdes.String(), Serdes.Double())
