@@ -19,7 +19,7 @@ class Sensor:
         self.interval = timedelta(minutes=15)
         self.val_range = val_range
         self.value = float(F.random.randrange(self.val_range[0]*100, self.val_range[1]*100)/100)
-        self.time = datetime.now()
+        self.time = datetime.now() - timedelta(hours=2)
         self.late_count = 0    # used to find when to send late-event-data
 
     def generate(self):
@@ -57,7 +57,7 @@ class SumSensor(Sensor):
         self.value = 0.0
         self.interval = timedelta(days=1)
 
-
+    #TODO: this sensors should print value at the end of the day, not at a random time (23:45 or 00:00 only)
     def generate(self):
         to_print = "{}|{}".format(self.time.strftime("%Y-%m-%d %H:%M"),round(self.value,2))
         self.value += float(F.random.randrange(self.val_range[0]*100, self.val_range[1]*100)/100)
@@ -78,9 +78,10 @@ class MoveSensor(Sensor):
     def generate(self):
         if(self.count in self.ace_index):
             # self.time += timedelta(minutes=self.count*15)
-            to_print = "{} | {}".format((self.time + timedelta(minutes=self.count*15)).strftime("%Y-%m-%d %H:%M"),1)
+            to_print = "{}|{}".format((self.time + timedelta(minutes=self.count*15)).strftime("%Y-%m-%d %H:%M"),1)
         else:
-            to_print = "NO DATA"   # could also be None, will be filtered in next layer
+            #TODO: this data must be handled when no move event is occured
+            to_print = "{}|{}".format((self.time + timedelta(minutes=self.count*15)).strftime("%Y-%m-%d %H:%M"),0)   # could also be None, will be filtered in next layer
 
         if self.count == 95:   # if one day passed, reset the counter and pick new random times to send 1
             self.count, self.time = 0, self.time + timedelta(days=1)

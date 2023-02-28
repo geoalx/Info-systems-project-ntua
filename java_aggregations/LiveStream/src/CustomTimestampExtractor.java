@@ -17,6 +17,7 @@ public class CustomTimestampExtractor implements TimestampExtractor {
         try {
             newdate = LocalDateTime.parse(date, dtf);
         } catch (DateTimeParseException e) {
+
             System.out.print("Error occured during date parsing");
         }
 
