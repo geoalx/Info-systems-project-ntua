@@ -14,6 +14,7 @@ import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.kstream.ForeachAction;
 import org.apache.kafka.streams.kstream.Grouped;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
@@ -84,7 +85,7 @@ public class App {
         props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
         
         InfluxDBClient client = InfluxDBClientFactory.create("http://localhost:8086", 
-        "z2vYCdXn5etmn-o-OD8l50HuKUrNwjp8xoCsQVjx1GZxgNLmyvNZcnhbVd_x9s3_WoWs7aNoT9Q1gWsRNA3hfg==".toCharArray(),
+        "SfhKJc-PSWSDSK5LiQfjeQGVe09-TeONKC9E60xjqgci6tt_JFrIbZuEUN_IT8YxMpGOB1QyL7BQtnY54xuGxw==".toCharArray(),
         "info_sys_ntua",
         "info_sys_bucket"
         );
@@ -117,80 +118,91 @@ public class App {
         //1 day sensors processing
         //Wtot sensor aggregations
         inputStreamWtot
-        .mapValues(v -> v.split("\\|")[1])
+        //.mapValues(v -> v.split("\\|")[1])
         .peek((k,v)->{
-            System.out.println("[WTOT] Received message: key = " + k + " value = " + v);
-            rcv_msg_count++;
+            peek_message(k, v, "WTOT", writeApi,false);
         })
         .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
         .windowedBy(TimeWindows.ofSizeWithNoGrace(Duration.ofDays(1)).advanceBy(Duration.ofDays(1)))
         .aggregate(
-        () ->  0.0D,
-        (key,value,av) -> AggDayDiffWtot(value),
-        Materialized.with(Serdes.String(), Serdes.Double())
+        () ->  "0|0.0D",
+        (key,value,av) -> {
+            String[] value_split = value.split("\\|");
+            return value_split[0]+"|"+AggDayDiffWtot(value_split[1]);
+        },
+        Materialized
+        .<String, String, WindowStore<Bytes, byte[]>>as("windowed-aggregation-store-WTOT")
+        .withKeySerde(Serdes.String())
+        .withValueSerde(Serdes.String())
+        .withLoggingDisabled() // disable caching and logging
 
         )
         .toStream()
         .map(
             (k,v) -> KeyValue.pair(k.key().toString(), v.toString()))
-        .peek((k,v) -> {
-            System.out.println("[WTOT] Aggregated key=" + k + ", and aggregated value=" + v);
-            count2++;
-            System.out.println(count2 + " " +v);
+        .peek((k,v)->{
+            peek_message(k, v, "WTOT", writeApi, true);
         });
 
         // Etot sensor aggregations
         inputStreamEtot
-        .mapValues(v -> v.split("\\|")[1])
+        //.mapValues(v -> v.split("\\|")[1])
         .peek((k,v)->{
-            System.out.println("[ETOT] Received message: key = " + k + " value = " + v);
-            rcv_msg_count++;
+            peek_message(k, v, "ETOT", writeApi, false);
         })
         .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
         .windowedBy(TimeWindows.ofSizeWithNoGrace(Duration.ofDays(1)).advanceBy(Duration.ofDays(1)))
         .aggregate(
-        () ->  0.0D,
-        (key,value,av) -> AggDayDiffEtot(value),
-        Materialized.with(Serdes.String(), Serdes.Double())
+        () ->  "0|0.0",
+        (key,value,av) -> {
+            String[] value_split = value.split("\\|");
+            
+            return value_split[0]+"|"+AggDayDiffEtot(value_split[1]);
+        },
+        Materialized
+        .<String, String, WindowStore<Bytes, byte[]>>as("windowed-aggregation-store-ETOT")
+        .withKeySerde(Serdes.String())
+        .withValueSerde(Serdes.String())
+        .withLoggingDisabled() // disable caching and logging
         )
         .toStream()
         .map(
             (k,v) -> KeyValue.pair(k.key().toString(), v.toString()))
         .peek((k,v) -> {
-            System.out.println("[ETOT] Aggregated key=" + k + ", and aggregated value=" + v);
-            count2++;
-            System.out.println(count2 + " " +v);
+            peek_message(k, v, "ETOT", writeApi, true);
         });
 
         // 15min sensors processing
         {
 
         inputStreamTH1
-        .mapValues(v -> v.split("\\|")[1])
+        //.mapValues(v -> v.split("\\|")[1])
         .peek((k,v)->{
-            System.out.println("[TH1] Received message: key = " + k + " value = " + v);
-            rcv_msg_count++;
+            peek_message(k, v, "TH1", writeApi, false);
         })
         .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
         //.windowedBy(TimeWindows.ofSizeAndGrace(Duration.ofSeconds(10), Duration.ofSeconds(10)).advanceBy(Duration.ofSeconds(10)))
         .windowedBy(TimeWindows.ofSizeWithNoGrace(Duration.ofDays(1)).advanceBy(Duration.ofDays(1)))
         //.count()
         .aggregate(
-        () -> { countTH1=0; return 0.0d;},
+        () -> { countTH1=0; return "0|0.0";},
         (key,value,av) -> {   
 
+            String[] value_split = value.split("\\|");
+            
             countTH1++;
             if(countTH1==0){
-                return Double.parseDouble(value);
+                return value;
             }
             
-            return (av*(countTH1-1)+ Double.parseDouble(value))/countTH1;   
+            String[] av_split = av.split("\\|");
+            return value_split[0] + "|"+((Double.parseDouble(av_split[1])*(countTH1-1)+ Double.parseDouble(value_split[1]))/countTH1);   
 
         },
         Materialized
-        .<String, Double, WindowStore<Bytes, byte[]>>as("windowed-aggregation-store-TH1")
+        .<String, String, WindowStore<Bytes, byte[]>>as("windowed-aggregation-store-TH1")
         .withKeySerde(Serdes.String())
-        .withValueSerde(Serdes.Double())
+        .withValueSerde(Serdes.String())
         .withLoggingDisabled() // disable caching and logging
         )
         .toStream()
@@ -198,171 +210,187 @@ public class App {
             (k,v) -> KeyValue.pair(k.key().toString(), v.toString())
             )
         .peek((k,v) -> {
-            System.out.println("[TH1] Aggregated key=" + k + ", and aggregated value=" + v);
+            peek_message(k, v, "TH1", writeApi, true);
         });
 
         inputStreamTH2
-        .mapValues(v -> v.split("\\|")[1])
+        //.mapValues(v -> v.split("\\|")[1])
         .peek((k,v)->{
-            System.out.println("[TH2] Received message: key = " + k + " value = " + v);
-            rcv_msg_count++;
+            peek_message(k, v, "TH2", writeApi, false);
         })
         .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
         .windowedBy(TimeWindows.ofSizeWithNoGrace(Duration.ofDays(1)).advanceBy(Duration.ofDays(1)))
         .aggregate(
-        () ->  {countTH2=0;return 0.0D;},
+        () ->  {countTH2=0;return "0|0.0";},
         (key,value,av) -> {
 
-            countTH2++;
-
-
+            String[] value_split = value.split("\\|");
+            
+            countTH1++;
             if(countTH2==0){
-                return Double.parseDouble(value);
+                return value;
             }
             
-            return (av*(countTH2-1)+ Double.parseDouble(value))/countTH2;   
+            String[] av_split = av.split("\\|");
+            return value_split[0] + "|"+((Double.parseDouble(av_split[1])*(countTH2-1)+ Double.parseDouble(value_split[1]))/countTH2);  
 
         },
         Materialized
-        .<String, Double, WindowStore<Bytes, byte[]>>as("windowed-aggregation-store-TH2")
+        .<String, String, WindowStore<Bytes, byte[]>>as("windowed-aggregation-store-TH2")
         .withKeySerde(Serdes.String())
-        .withValueSerde(Serdes.Double())
+        .withValueSerde(Serdes.String())
         .withLoggingDisabled() // disable caching and logging
-        
-        
         )
         .toStream()
         .map(
             (k,v) -> KeyValue.pair(k.key().toString(), v.toString()))
         .peek((k,v) -> {
-            System.out.println("[TH2] Aggregated key=" + k + ", and aggregated value=" + v);
-            count2++;
-            System.out.println(count2 + " " +v);
+            peek_message(k, v, "TH2", writeApi, true);
         });
 
         inputStreamHVAC1
-        .mapValues(v -> v.split("\\|")[1])
+        //.mapValues(v -> v.split("\\|")[1])
         .peek((k,v)->{
-            System.out.println("[HVAC1] Received message: key = " + k + " value = " + v);
-            rcv_msg_count++;
+            peek_message(k, v, "HVAC1", writeApi, false);
         })
         .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
         .windowedBy(TimeWindows.ofSizeAndGrace(Duration.ofDays(1), Duration.ofSeconds(10)).advanceBy(Duration.ofDays(1)))
         .aggregate(
-        () ->  0.0D,
-        (key,value,av) -> adder(av,value),
+        () ->  "0|0.0",
+        (key,value,av) -> {
+            String[] value_split = value.split("\\|");
+            String[] av_split = av.split("\\|");
+
+            return value_split[0]+"|"+adder(Double.parseDouble(av_split[1]),value_split[1]);
+        
+        },
         Materialized
-        .<String, Double, WindowStore<Bytes, byte[]>>as("windowed-aggregation-store-HVAC1")
+        .<String, String, WindowStore<Bytes, byte[]>>as("windowed-aggregation-store-HVAC1")
         .withKeySerde(Serdes.String())
-        .withValueSerde(Serdes.Double())
+        .withValueSerde(Serdes.String())
         .withLoggingDisabled() // disable caching and logging
         ).toStream()
         .map(
             (k,v) -> KeyValue.pair(k.key().toString(), v.toString()))
         .peek((k,v) -> {
-            System.out.println("[HVAC1] Aggregated key=" + k + ", and aggregated value=" + v);
-            count2++;
-            System.out.println(count2 + " " +v);
+            peek_message(k, v, "HVAC1", writeApi, true);
         });
 
         inputStreamHVAC2
-        .mapValues(v -> v.split("\\|")[1])
+        //.mapValues(v -> v.split("\\|")[1])
         .peek((k,v)->{
+            peek_message(k, v, "HVAC2", writeApi, false);
             System.out.println("[HVAC2] Received message: key = " + k + " value = " + v);
             rcv_msg_count++;
         })
         .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
         .windowedBy(TimeWindows.ofSizeAndGrace(Duration.ofDays(1), Duration.ofSeconds(10)).advanceBy(Duration.ofDays(1)))
         .aggregate(
-        () ->  0.0D,
-        (key,value,av) -> adder(av,value),
+        () ->  "0|0.0",
+        (key,value,av) -> {
+            
+            String[] value_split = value.split("\\|");
+            String[] av_split = av.split("\\|");
+            return value_split[0]+"|"+adder(Double.parseDouble(av_split[1]),value_split[1]);
+        },
         Materialized
-        .<String, Double, WindowStore<Bytes, byte[]>>as("windowed-aggregation-store-HVAC2")
+        .<String, String, WindowStore<Bytes, byte[]>>as("windowed-aggregation-store-HVAC2")
         .withKeySerde(Serdes.String())
-        .withValueSerde(Serdes.Double())
+        .withValueSerde(Serdes.String())
         .withLoggingDisabled() // disable caching and logging
         ).toStream()
         .map(
             (k,v) -> KeyValue.pair(k.key().toString(), v.toString()))
         .peek((k,v) -> {
+            peek_message(k, v, "HVAC2", writeApi, true);
             System.out.println("[HVAC2] Aggregated key=" + k + ", and aggregated value=" + v);
             count2++;
             System.out.println(count2 + " " +v);
         });
 
         inputStreamMiAC1
-        .mapValues(v -> v.split("\\|")[1])
+        //.mapValues(v -> v.split("\\|")[1])
         .peek((k,v)->{
+            peek_message(k, v, "MiAC1", writeApi, false);
             System.out.println("[MiAC1] Received message: key = " + k + " value = " + v);
             rcv_msg_count++;
         })
         .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
         .windowedBy(TimeWindows.ofSizeAndGrace(Duration.ofDays(1), Duration.ofSeconds(10)).advanceBy(Duration.ofDays(1)))
         .aggregate(
-        () ->  0.0D,
-        (key,value,av) -> adder(av,value),
+        () ->   "0|0.0",
+        (key,value,av) -> {
+            String[] value_split = value.split("\\|");
+            String[] av_split = av.split("\\|");
+            return value_split[0]+"|"+adder(Double.parseDouble(av_split[1]),value_split[1]);
+        },
         Materialized
-        .<String, Double, WindowStore<Bytes, byte[]>>as("windowed-aggregation-store-MiAC1")
+        .<String, String, WindowStore<Bytes, byte[]>>as("windowed-aggregation-store-MiAC1")
         .withKeySerde(Serdes.String())
-        .withValueSerde(Serdes.Double())
+        .withValueSerde(Serdes.String())
         .withLoggingDisabled() // disable caching and logging
         ).toStream()
         .map(
             (k,v) -> KeyValue.pair(k.key().toString(), v.toString()))
         .peek((k,v) -> {
+            peek_message(k, v, "MiAC1", writeApi, true);
             System.out.println("[MiAC1] Aggregated key=" + k + ", and aggregated value=" + v);
             count2++;
             System.out.println(count2 + " " +v);
         });
 
         inputStreamMiAC2
-        .mapValues(v -> v.split("\\|")[1])
+        //.mapValues(v -> v.split("\\|")[1])
         .peek((k,v)->{
-            System.out.println("[MiAC2] Received message: key = " + k + " value = " + v);
-            rcv_msg_count++;
+            peek_message(k, v, "MiAC2", writeApi, false);
         })
         .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
         .windowedBy(TimeWindows.ofSizeAndGrace(Duration.ofDays(1), Duration.ofSeconds(10)).advanceBy(Duration.ofDays(1)))
         .aggregate(
-        () ->  0.0D,
-        (key,value,av) -> adder(av,value),
+        () ->  "0|0.0",
+        (key,value,av) -> {
+            String[] value_split = value.split("\\|");
+            String[] av_split = av.split("\\|");
+            return value_split[0]+"|"+adder(Double.parseDouble(av_split[1]),value_split[1]);
+        },
         Materialized
-        .<String, Double, WindowStore<Bytes, byte[]>>as("windowed-aggregation-store-MiAC2")
+        .<String, String, WindowStore<Bytes, byte[]>>as("windowed-aggregation-store-MiAC2")
         .withKeySerde(Serdes.String())
-        .withValueSerde(Serdes.Double())
+        .withValueSerde(Serdes.String())
         .withLoggingDisabled() // disable caching and logging
         ).toStream()
         .map(
             (k,v) -> KeyValue.pair(k.key().toString(), v.toString()))
         .peek((k,v) -> {
-            System.out.println("[MiAC2] Aggregated key=" + k + ", and aggregated value=" + v);
-            count2++;
-            System.out.println(count2 + " " +v);
+            peek_message(k, v, "MiAC2", writeApi, true);
         });
 
         inputStreamW1
-        .mapValues(v -> v.split("\\|")[1])
+        //.mapValues(v -> v.split("\\|")[1])
         .peek((k,v)->{
-            System.out.println("[W1]Received message: key = " + k + " value = " + v);
-            rcv_msg_count++;
+            peek_message(k, v, "W1", writeApi, false);
         })
         .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
-        .windowedBy(TimeWindows.ofSizeAndGrace(Duration.ofDays(1), Duration.ofSeconds(25)).advanceBy(Duration.ofDays(1)))
+        .windowedBy(TimeWindows.ofSizeAndGrace(Duration.ofDays(1), Duration.ofSeconds(100)).advanceBy(Duration.ofDays(1)))
         .aggregate(
-        () ->  0.0D,
-        (key,value,av) -> adder(av,value),
+        () ->  "0|0.0",
+        (key,value,av) -> {
+            String[] value_split = value.split("\\|");
+            String[] av_split = av.split("\\|");
+            return value_split[0]+"|"+adder(Double.parseDouble(av_split[1]),value_split[1]);
+        },
         Materialized
-        .<String, Double, WindowStore<Bytes, byte[]>>as("windowed-aggregation-store-W1")
+        .<String, String, WindowStore<Bytes, byte[]>>as("windowed-aggregation-store-W1")
         .withKeySerde(Serdes.String())
-        .withValueSerde(Serdes.Double())
+        .withValueSerde(Serdes.String())
         .withLoggingDisabled() // disable caching and logging
-        ).toStream()
+        )
+        .suppress(Suppressed.untilWindowCloses(Suppressed.BufferConfig.unbounded()))
+        .toStream()
         .map(
             (k,v) -> KeyValue.pair(k.key().toString(), v.toString()))
         .peek((k,v) -> {
-            System.out.println("[W1] Aggregated key=" + k + ", and aggregated value=" + v);
-            count2++;
-            System.out.println(count2 + " " +v);
+            peek_message(k, v, "W1", writeApi, true);
         });
 
     }
@@ -425,9 +453,10 @@ public class App {
         return a+x;
     }
 
-    public static void peek_message(String key, String value, String measurement,WriteApi influxapi) {
-            System.out.println("Received message: key = " + key + ", value = " + value);
+    public static void peek_message(String key, String value, String measurement,WriteApi influxapi,boolean isAgg) {
             String[] parts = value.split("\\|");
+            System.out.println("["+measurement+"-INFLUX]"+" Received message: key = " + key + ", value = " + parts[1]);
+
             
             DateTimeFormatter dtf = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm", Locale.ENGLISH);
             LocalDateTime date = null;
@@ -436,8 +465,13 @@ public class App {
             } catch (DateTimeParseException e) {
                 System.out.print("Error occured during date parsing");
             }
-            
-            influxapi.writeRecord("info_sys_bucket", "info_sys_ntua", WritePrecision.MS, measurement+" value="+parts[1]+" "+Timestamp.valueOf(date).getTime());
 
+
+            if(isAgg){
+                influxapi.writeRecord("info_sys_bucket", "info_sys_ntua", WritePrecision.MS, measurement+",location=aggregated"+" value="+parts[1]+" "+Timestamp.valueOf(date).getTime());
+            }
+            else{
+                influxapi.writeRecord("info_sys_bucket", "info_sys_ntua", WritePrecision.MS, measurement+",location=raw"+" value="+parts[1]+" "+Timestamp.valueOf(date).getTime());
+            }
     }
 }
