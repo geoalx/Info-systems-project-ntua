@@ -11,6 +11,7 @@ import org.apache.kafka.streams.kstream.SlidingWindows;
 import org.apache.kafka.streams.kstream.Suppressed;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.Window;
+import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.kstream.ForeachAction;
 import org.apache.kafka.streams.kstream.Grouped;
@@ -22,6 +23,8 @@ import org.apache.kafka.common.utils.Bytes;
 import com.influxdb.client.*;
 import com.influxdb.client.domain.WritePrecision;
 import com.influxdb.client.write.*;
+
+
 import com.fasterxml.jackson.annotation.JsonTypeInfo.Id;
 import com.influxdb.*;
 import java.time.ZoneId;
@@ -40,34 +43,7 @@ import java.util.Properties;
 @SuppressWarnings("all")
 
 public class App {
-    // class MyCountAndSum{
-    //     private double sum_value;
-    //     private long count_value;
 
-    //     local class for aggregagtions that need average
-    //     public MyCountAndSum(long c, double s) {
-    //         sum_value = s;
-    //         count_value = c;
-    //     }
-
-    //     public long getCount() {
-    //         return count_value;
-    //     }
-
-    //     public double getSum() {
-    //         return sum_value;
-    //     }
-
-    //     public void increment_counter() {
-    //         count_value++;
-    //     }
-    //     public void add_value(double new_val) {
-    //         sum_value += new_val;
-    //     }
-        
-    // };
-
-    // public static double peos = 0.0d;
     public static double prev_wtot = 0.0d;
     public static double prev_etot = 0.0d;
     public static int countTH1 = 0;
@@ -83,11 +59,14 @@ public class App {
         props.put(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG, CustomTimestampExtractor.class.getName());
         props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
         props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
+
+
+        
         
         InfluxDBClient client = InfluxDBClientFactory.create("http://localhost:8086", 
         "SfhKJc-PSWSDSK5LiQfjeQGVe09-TeONKC9E60xjqgci6tt_JFrIbZuEUN_IT8YxMpGOB1QyL7BQtnY54xuGxw==".toCharArray(),
         "info_sys_ntua",
-        "info_sys_bucket"
+        "info_sheesh_bucket"
         );
 
         WriteApi writeApi = client.makeWriteApi();
@@ -97,6 +76,14 @@ public class App {
         final Serde<Long> longSerde = Serdes.Long();
         // define the input stream and subscribe to it
 
+        builder.addStateStore(
+            Stores.keyValueStoreBuilder(
+                Stores.persistentKeyValueStore("prev-values"),
+                Serdes.String(),
+                Serdes.String()
+            )
+        );
+
         // 15min sensors
         KStream<String, String> inputStreamTH1 = builder.stream("TH1", Consumed.with(stringSerde, stringSerde));
         KStream<String, String> inputStreamTH2 = builder.stream("TH2", Consumed.with(stringSerde, stringSerde));
@@ -105,15 +92,51 @@ public class App {
         KStream<String, String> inputStreamMiAC1 = builder.stream("MiAC1", Consumed.with(stringSerde, stringSerde));
         KStream<String, String> inputStreamMiAC2 = builder.stream("MiAC2", Consumed.with(stringSerde, stringSerde));
         
-        // 15min sensors with late events
-        KStream<String, String> inputStreamW1 = builder.stream("W1", Consumed.with(stringSerde, stringSerde));
-
         //1day sensors
         KStream<String, String> inputStreamWtot = builder.stream("Wtot", Consumed.with(stringSerde, stringSerde));
         KStream<String, String> inputStreamEtot = builder.stream("Etot", Consumed.with(stringSerde, stringSerde));
         
         //Async move sensor
         KStream<String, String> inputStreamMov1 = builder.stream("Mov1", Consumed.with(stringSerde, stringSerde));
+        
+        // 15min sensors with late events
+        KStream<String, String> inputStreamW1 = builder.stream("W1", Consumed.with(stringSerde, stringSerde));
+
+        KStream<String,String>[] filteredW1 = inputStreamW1.transform(new LateEventFilter(),"prev-values").branch(
+            (k,v) -> !v.contains("LATE"),
+            (k,v) -> v.contains("LATE")
+        );
+
+        KStream<String, String> inputStreamW1_filtered = filteredW1[0];
+        KStream<String, String> inputStreamW1_late = filteredW1[1];
+ 
+        //Move sensor
+        inputStreamMov1.
+        peek((k,v) -> {
+            peek_message(k, v, "MOV1", writeApi, false);
+        })
+        .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
+        .windowedBy(TimeWindows.ofSizeWithNoGrace(Duration.ofDays(1)).advanceBy(Duration.ofDays(1)))
+        .aggregate(
+        () ->  "0|0",
+        (key,value,av) -> {
+            String[] value_split = value.split("\\|");
+            int x = Integer.parseInt(value_split[1]);
+            x++;
+            return value_split[0]+"|"+x;
+        },Materialized
+        .<String, String, WindowStore<Bytes, byte[]>>as("windowed-aggregation-store-MOV1")
+        .withKeySerde(Serdes.String())
+        .withValueSerde(Serdes.String())
+        .withLoggingDisabled()
+        )
+        .suppress(Suppressed.untilWindowCloses(Suppressed.BufferConfig.unbounded()))
+        .toStream()
+        .map( (k,v) -> KeyValue.pair(k.key().toString(), v.toString()))
+        .peek((k,v) -> {
+            peek_message(k, v, "MOV1", writeApi, true);
+        });
+
 
         //1 day sensors processing
         //Wtot sensor aggregations
@@ -137,6 +160,7 @@ public class App {
         .withLoggingDisabled() // disable caching and logging
 
         )
+        .suppress(Suppressed.untilWindowCloses(Suppressed.BufferConfig.unbounded()))
         .toStream()
         .map(
             (k,v) -> KeyValue.pair(k.key().toString(), v.toString()))
@@ -165,6 +189,7 @@ public class App {
         .withValueSerde(Serdes.String())
         .withLoggingDisabled() // disable caching and logging
         )
+        .suppress(Suppressed.untilWindowCloses(Suppressed.BufferConfig.unbounded()))
         .toStream()
         .map(
             (k,v) -> KeyValue.pair(k.key().toString(), v.toString()))
@@ -181,9 +206,7 @@ public class App {
             peek_message(k, v, "TH1", writeApi, false);
         })
         .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
-        //.windowedBy(TimeWindows.ofSizeAndGrace(Duration.ofSeconds(10), Duration.ofSeconds(10)).advanceBy(Duration.ofSeconds(10)))
         .windowedBy(TimeWindows.ofSizeWithNoGrace(Duration.ofDays(1)).advanceBy(Duration.ofDays(1)))
-        //.count()
         .aggregate(
         () -> { countTH1=0; return "0|0.0";},
         (key,value,av) -> {   
@@ -205,6 +228,7 @@ public class App {
         .withValueSerde(Serdes.String())
         .withLoggingDisabled() // disable caching and logging
         )
+        .suppress(Suppressed.untilWindowCloses(Suppressed.BufferConfig.unbounded()))
         .toStream()
         .map(
             (k,v) -> KeyValue.pair(k.key().toString(), v.toString())
@@ -239,8 +263,9 @@ public class App {
         .<String, String, WindowStore<Bytes, byte[]>>as("windowed-aggregation-store-TH2")
         .withKeySerde(Serdes.String())
         .withValueSerde(Serdes.String())
-        .withLoggingDisabled() // disable caching and logging
+        //.withLoggingDisabled() // disable caching and logging
         )
+        .suppress(Suppressed.untilWindowCloses(Suppressed.BufferConfig.unbounded()))
         .toStream()
         .map(
             (k,v) -> KeyValue.pair(k.key().toString(), v.toString()))
@@ -269,7 +294,9 @@ public class App {
         .withKeySerde(Serdes.String())
         .withValueSerde(Serdes.String())
         .withLoggingDisabled() // disable caching and logging
-        ).toStream()
+        )
+        .suppress(Suppressed.untilWindowCloses(Suppressed.BufferConfig.unbounded()))
+        .toStream()
         .map(
             (k,v) -> KeyValue.pair(k.key().toString(), v.toString()))
         .peek((k,v) -> {
@@ -280,8 +307,6 @@ public class App {
         //.mapValues(v -> v.split("\\|")[1])
         .peek((k,v)->{
             peek_message(k, v, "HVAC2", writeApi, false);
-            System.out.println("[HVAC2] Received message: key = " + k + " value = " + v);
-            rcv_msg_count++;
         })
         .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
         .windowedBy(TimeWindows.ofSizeAndGrace(Duration.ofDays(1), Duration.ofSeconds(10)).advanceBy(Duration.ofDays(1)))
@@ -298,22 +323,19 @@ public class App {
         .withKeySerde(Serdes.String())
         .withValueSerde(Serdes.String())
         .withLoggingDisabled() // disable caching and logging
-        ).toStream()
+        )
+        .suppress(Suppressed.untilWindowCloses(Suppressed.BufferConfig.unbounded()))
+        .toStream()
         .map(
             (k,v) -> KeyValue.pair(k.key().toString(), v.toString()))
         .peek((k,v) -> {
             peek_message(k, v, "HVAC2", writeApi, true);
-            System.out.println("[HVAC2] Aggregated key=" + k + ", and aggregated value=" + v);
-            count2++;
-            System.out.println(count2 + " " +v);
         });
 
         inputStreamMiAC1
         //.mapValues(v -> v.split("\\|")[1])
         .peek((k,v)->{
             peek_message(k, v, "MiAC1", writeApi, false);
-            System.out.println("[MiAC1] Received message: key = " + k + " value = " + v);
-            rcv_msg_count++;
         })
         .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
         .windowedBy(TimeWindows.ofSizeAndGrace(Duration.ofDays(1), Duration.ofSeconds(10)).advanceBy(Duration.ofDays(1)))
@@ -329,14 +351,13 @@ public class App {
         .withKeySerde(Serdes.String())
         .withValueSerde(Serdes.String())
         .withLoggingDisabled() // disable caching and logging
-        ).toStream()
+        )
+        .suppress(Suppressed.untilWindowCloses(Suppressed.BufferConfig.unbounded()))
+        .toStream()
         .map(
             (k,v) -> KeyValue.pair(k.key().toString(), v.toString()))
         .peek((k,v) -> {
             peek_message(k, v, "MiAC1", writeApi, true);
-            System.out.println("[MiAC1] Aggregated key=" + k + ", and aggregated value=" + v);
-            count2++;
-            System.out.println(count2 + " " +v);
         });
 
         inputStreamMiAC2
@@ -358,20 +379,28 @@ public class App {
         .withKeySerde(Serdes.String())
         .withValueSerde(Serdes.String())
         .withLoggingDisabled() // disable caching and logging
-        ).toStream()
+        )
+        .suppress(Suppressed.untilWindowCloses(Suppressed.BufferConfig.unbounded()))
+        .toStream()
         .map(
             (k,v) -> KeyValue.pair(k.key().toString(), v.toString()))
         .peek((k,v) -> {
             peek_message(k, v, "MiAC2", writeApi, true);
         });
 
-        inputStreamW1
-        //.mapValues(v -> v.split("\\|")[1])
+
+        inputStreamW1_late
+        .mapValues((v)-> {String[] v_split = v.split("\\|"); return v_split[0]+"|"+v_split[1];})
+        .peek((k,v)->{
+            peek_message(k, v, "W1_LATE", writeApi, false);
+        });
+
+        inputStreamW1_filtered
         .peek((k,v)->{
             peek_message(k, v, "W1", writeApi, false);
         })
         .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
-        .windowedBy(TimeWindows.ofSizeAndGrace(Duration.ofDays(1), Duration.ofSeconds(100)).advanceBy(Duration.ofDays(1)))
+        .windowedBy(TimeWindows.ofSizeAndGrace(Duration.ofDays(1), Duration.ofSeconds(10)).advanceBy(Duration.ofDays(1)))
         .aggregate(
         () ->  "0|0.0",
         (key,value,av) -> {
@@ -394,6 +423,10 @@ public class App {
         });
 
     }
+    
+
+
+
         KafkaStreams streams = new KafkaStreams(builder.build(), props);
         streams.start();
 
@@ -455,7 +488,14 @@ public class App {
 
     public static void peek_message(String key, String value, String measurement,WriteApi influxapi,boolean isAgg) {
             String[] parts = value.split("\\|");
-            System.out.println("["+measurement+"-INFLUX]"+" Received message: key = " + key + ", value = " + parts[1]);
+            String aggr_flag = "";
+            if(isAgg){
+                aggr_flag = "-AGG";
+            }
+            else{
+                aggr_flag = "-RAW";
+            }
+            System.out.println("["+measurement+aggr_flag+"-INFLUX]"+" Received message: key = " + key + ", value = " + parts[1]);
 
             
             DateTimeFormatter dtf = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm", Locale.ENGLISH);
@@ -468,10 +508,10 @@ public class App {
 
 
             if(isAgg){
-                influxapi.writeRecord("info_sys_bucket", "info_sys_ntua", WritePrecision.MS, measurement+",location=aggregated"+" value="+parts[1]+" "+Timestamp.valueOf(date).getTime());
+                influxapi.writeRecord("info_sheesh_bucket", "info_sys_ntua", WritePrecision.MS, measurement+",location=aggregated"+" value="+parts[1]+" "+Timestamp.valueOf(date).getTime());
             }
             else{
-                influxapi.writeRecord("info_sys_bucket", "info_sys_ntua", WritePrecision.MS, measurement+",location=raw"+" value="+parts[1]+" "+Timestamp.valueOf(date).getTime());
+                influxapi.writeRecord("info_sheesh_bucket", "info_sys_ntua", WritePrecision.MS, measurement+",location=raw"+" value="+parts[1]+" "+Timestamp.valueOf(date).getTime());
             }
     }
 }
