@@ -19,12 +19,11 @@ class Sensor:
         self.interval = timedelta(minutes=15)
         self.val_range = val_range
         self.value = float(F.random.randrange(self.val_range[0]*100, self.val_range[1]*100)/100)
-        self.time = datetime.now() - timedelta(hours=2)
+        self.time = datetime.now() + timedelta(days=1)
         self.late_count = 0    # used to find when to send late-event-data
 
     def generate(self):
         to_print = "{}|{}".format(self.time.strftime("%Y-%m-%d %H:%M"),round(self.value,2))
-        self.time += self.interval
         self.value = float(F.random.randrange(self.val_range[0]*100, self.val_range[1]*100)/100)
 
         if self.late_count % 20 == 0 and self.late_count != 0 and self.late:   # add late event from 2 days before
@@ -33,12 +32,13 @@ class Sensor:
             to_print_2 = "{}|{}".format(late_time.strftime("%Y-%m-%d %H:%M"),round(value_2,2))
             to_print += '$' + to_print_2
 
-        if self.late_count % 120 == 0 and self.late_count != 0  and self.late:  # add late event from 10 days before
+        if self.late_count % 30 == 0 and self.late_count != 0  and self.late:  # add late event from 10 days before
             value_10 = float(F.random.randrange(self.val_range[0]*100, self.val_range[1]*100)/100)
             late_time = self.time - timedelta(days=10)
             to_print_10 = "{}|{}".format(late_time.strftime("%Y-%m-%d %H:%M"),round(value_10,2))   
             to_print += '$' + to_print_10
 
+        self.time += self.interval
         
         self.late_count += 1
         return to_print
@@ -108,7 +108,7 @@ if __name__ == "__main__":
 
     producer.flush()
 
-    for i in tqdm(range(30)):
+    for i in tqdm(range(240)):
         sleep(1)
         for sensor in sensors:
             with open("{}.txt".format(sensor.name), "a") as f:
