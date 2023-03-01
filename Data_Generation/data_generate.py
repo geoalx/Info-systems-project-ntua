@@ -19,7 +19,7 @@ class Sensor:
         self.interval = timedelta(minutes=15)
         self.val_range = val_range
         self.value = float(F.random.randrange(self.val_range[0]*100, self.val_range[1]*100)/100)
-        self.time = datetime.now() + timedelta(days=1)
+        self.time = datetime.now() + timedelta(days=5)
         self.late_count = 0    # used to find when to send late-event-data
 
     def generate(self):
@@ -32,7 +32,7 @@ class Sensor:
             to_print_2 = "{}|{}".format(late_time.strftime("%Y-%m-%d %H:%M"),round(value_2,2))
             to_print += '$' + to_print_2
 
-        if self.late_count % 30 == 0 and self.late_count != 0  and self.late:  # add late event from 10 days before
+        if self.late_count % 120 == 0 and self.late_count != 0  and self.late:  # add late event from 10 days before
             value_10 = float(F.random.randrange(self.val_range[0]*100, self.val_range[1]*100)/100)
             late_time = self.time - timedelta(days=10)
             to_print_10 = "{}|{}".format(late_time.strftime("%Y-%m-%d %H:%M"),round(value_10,2))   
@@ -98,8 +98,6 @@ class MoveSensor(Sensor):
 if __name__ == "__main__":
     sensors = [Sensor("TH1", (12, 35)),Sensor("TH2", (12, 35)), Sensor("HVAC1", (0, 100)),Sensor("HVAC2", (0, 200)),Sensor("MiAC1", (0, 150)),Sensor("MiAC2", (0, 200)), SumSensor("Etot", (2600*24 - 1000, 2600*24 + 1000)),Sensor("W1",(0,1), late=True),SumSensor("Wtot",(100,120)),MoveSensor("Mov1")]
     
-    headers_to_test = ["TH1","HVAC1","Etot","W1"]
-    
     # Producer Configuration
     local_conf = {'bootstrap.servers': 'localhost:9092'}
 
@@ -108,9 +106,13 @@ if __name__ == "__main__":
 
     producer.flush()
 
-    for i in tqdm(range(240)):
+    counter = 0
+    for i in tqdm(range(1450)):
         sleep(1)
         for sensor in sensors:
+            if (sensor.name == 'Etot' or sensor.name == 'Wtot') and counter > 0:
+                continue
+
             with open("{}.txt".format(sensor.name), "a") as f:
                 temp = sensor.generate()
                 
@@ -119,3 +121,4 @@ if __name__ == "__main__":
                     # send the generated data to the appropriate kafka broker topic (channel)
                     producer.produce(topic=sensor.name, key="dummy", value=str(t))  
                     producer.flush()
+        counter = 0 if counter == 95 else counter + 1

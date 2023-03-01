@@ -1,8 +1,0 @@
-{
-  "dependencies": {
-    "kafka-node": "^5.0.0",
-    "kafka-streams": "^5.0.0",
-    "moment": "^2.29.4",
-    "node-rdkafka": "^2.14.0"
-  }
-}

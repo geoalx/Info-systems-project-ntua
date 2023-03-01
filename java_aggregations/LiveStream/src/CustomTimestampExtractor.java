@@ -9,7 +9,7 @@ import java.sql.Timestamp;
 public class CustomTimestampExtractor implements TimestampExtractor {
     @Override
     public long extract(ConsumerRecord<Object, Object> record, long previousTimestamp) {
-
+        
         String date = record.value().toString().split("\\|")[0];
 
         DateTimeFormatter dtf = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm", Locale.ENGLISH);

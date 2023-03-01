@@ -6,11 +6,13 @@ import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Printed;
+import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.SlidingWindows;
 import org.apache.kafka.streams.kstream.Suppressed;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.Window;
+import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.kstream.ForeachAction;
@@ -18,6 +20,7 @@ import org.apache.kafka.streams.kstream.Grouped;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.serialization.Serdes.DoubleSerde;
 import org.apache.kafka.common.utils.Bytes;
 
 import com.influxdb.client.*;
@@ -74,6 +77,7 @@ public class App {
         StreamsBuilder builder = new StreamsBuilder();
         final Serde<String> stringSerde = Serdes.String();
         final Serde<Long> longSerde = Serdes.Long();
+        final Serde<Double> doubleSerde = Serdes.Double();
         // define the input stream and subscribe to it
 
         builder.addStateStore(
@@ -101,6 +105,9 @@ public class App {
         
         // 15min sensors with late events
         KStream<String, String> inputStreamW1 = builder.stream("W1", Consumed.with(stringSerde, stringSerde));
+
+        KStream<String,String> inputStreamWtotRest = builder.stream("WtotRest", Consumed.with(stringSerde, stringSerde));
+        KStream<String,String> inputStreamEtotRest = builder.stream("EtotRest", Consumed.with(stringSerde,stringSerde));
 
         KStream<String,String>[] filteredW1 = inputStreamW1.transform(new LateEventFilter(),"prev-values").branch(
             (k,v) -> !v.contains("LATE"),
@@ -132,7 +139,7 @@ public class App {
         )
         .suppress(Suppressed.untilWindowCloses(Suppressed.BufferConfig.unbounded()))
         .toStream()
-        .map( (k,v) -> KeyValue.pair(k.key().toString(), v.toString()))
+        .map( (k,v) -> KeyValue.pair(k.key().toString(), prep_timestamp(v.toString())))
         .peek((k,v) -> {
             peek_message(k, v, "MOV1", writeApi, true);
         });
@@ -163,10 +170,14 @@ public class App {
         .suppress(Suppressed.untilWindowCloses(Suppressed.BufferConfig.unbounded()))
         .toStream()
         .map(
-            (k,v) -> KeyValue.pair(k.key().toString(), v.toString()))
+            (k,v) -> KeyValue.pair(k.key().toString(), prep_timestamp(v.toString())))
         .peek((k,v)->{
             peek_message(k, v, "WTOT", writeApi, true);
-        });
+        }).map((k,v)->{
+            String[] v_split = v.split("\\|");
+            return KeyValue.pair(v_split[0], v.toString());
+        })
+        .to("WtotRest", Produced.with(Serdes.String(), Serdes.String()));
 
         // Etot sensor aggregations
         inputStreamEtot
@@ -192,10 +203,14 @@ public class App {
         .suppress(Suppressed.untilWindowCloses(Suppressed.BufferConfig.unbounded()))
         .toStream()
         .map(
-            (k,v) -> KeyValue.pair(k.key().toString(), v.toString()))
+            (k,v) -> KeyValue.pair(k.key().toString(), prep_timestamp(v.toString())))
         .peek((k,v) -> {
             peek_message(k, v, "ETOT", writeApi, true);
-        });
+        }).map((k,v)->{
+            String[] v_split = v.split("\\|");
+            return KeyValue.pair(v_split[0], v.toString());
+        })
+        .to("EtotRest", Produced.with(Serdes.String(), Serdes.String()));
 
         // 15min sensors processing
         {
@@ -231,7 +246,7 @@ public class App {
         .suppress(Suppressed.untilWindowCloses(Suppressed.BufferConfig.unbounded()))
         .toStream()
         .map(
-            (k,v) -> KeyValue.pair(k.key().toString(), v.toString())
+            (k,v) -> KeyValue.pair(k.key().toString(), prep_timestamp(v.toString()))
             )
         .peek((k,v) -> {
             peek_message(k, v, "TH1", writeApi, true);
@@ -268,7 +283,7 @@ public class App {
         .suppress(Suppressed.untilWindowCloses(Suppressed.BufferConfig.unbounded()))
         .toStream()
         .map(
-            (k,v) -> KeyValue.pair(k.key().toString(), v.toString()))
+            (k,v) -> KeyValue.pair(k.key().toString(), prep_timestamp(v.toString())))
         .peek((k,v) -> {
             peek_message(k, v, "TH2", writeApi, true);
         });
@@ -298,10 +313,14 @@ public class App {
         .suppress(Suppressed.untilWindowCloses(Suppressed.BufferConfig.unbounded()))
         .toStream()
         .map(
-            (k,v) -> KeyValue.pair(k.key().toString(), v.toString()))
+            (k,v) -> KeyValue.pair(k.key().toString(), prep_timestamp(v.toString())))
         .peek((k,v) -> {
             peek_message(k, v, "HVAC1", writeApi, true);
-        });
+        }).map((k,v)->{
+            String[] v_split = v.split("\\|");
+            return KeyValue.pair(v_split[0], v_split[0]+"|-"+v_split[1]);
+        })
+        .to("EtotRest", Produced.with(Serdes.String(), Serdes.String()));
 
         inputStreamHVAC2
         //.mapValues(v -> v.split("\\|")[1])
@@ -327,10 +346,14 @@ public class App {
         .suppress(Suppressed.untilWindowCloses(Suppressed.BufferConfig.unbounded()))
         .toStream()
         .map(
-            (k,v) -> KeyValue.pair(k.key().toString(), v.toString()))
+            (k,v) -> KeyValue.pair(k.key().toString(), prep_timestamp(v.toString())))
         .peek((k,v) -> {
             peek_message(k, v, "HVAC2", writeApi, true);
-        });
+        }).map((k,v)->{
+            String[] v_split = v.split("\\|");
+            return KeyValue.pair(v_split[0], v_split[0]+"|-"+v_split[1]);
+        })
+        .to("EtotRest", Produced.with(Serdes.String(), Serdes.String()));
 
         inputStreamMiAC1
         //.mapValues(v -> v.split("\\|")[1])
@@ -355,10 +378,14 @@ public class App {
         .suppress(Suppressed.untilWindowCloses(Suppressed.BufferConfig.unbounded()))
         .toStream()
         .map(
-            (k,v) -> KeyValue.pair(k.key().toString(), v.toString()))
+            (k,v) -> KeyValue.pair(k.key().toString(), prep_timestamp(v.toString())))
         .peek((k,v) -> {
             peek_message(k, v, "MiAC1", writeApi, true);
-        });
+        }).map((k,v)->{
+            String[] v_split = v.split("\\|");
+            return KeyValue.pair(v_split[0], v_split[0]+"|-"+v_split[1]);
+        })
+        .to("EtotRest", Produced.with(Serdes.String(), Serdes.String()));
 
         inputStreamMiAC2
         //.mapValues(v -> v.split("\\|")[1])
@@ -383,10 +410,14 @@ public class App {
         .suppress(Suppressed.untilWindowCloses(Suppressed.BufferConfig.unbounded()))
         .toStream()
         .map(
-            (k,v) -> KeyValue.pair(k.key().toString(), v.toString()))
+            (k,v) -> KeyValue.pair(k.key().toString(), prep_timestamp(v.toString())))
         .peek((k,v) -> {
             peek_message(k, v, "MiAC2", writeApi, true);
-        });
+        }).map((k,v)->{
+            String[] v_split = v.split("\\|");
+            return KeyValue.pair(v_split[0], v_split[0]+"|-"+v_split[1]);
+        })
+        .to("EtotRest", Produced.with(Serdes.String(), Serdes.String()));
 
 
         inputStreamW1_late
@@ -417,9 +448,44 @@ public class App {
         .suppress(Suppressed.untilWindowCloses(Suppressed.BufferConfig.unbounded()))
         .toStream()
         .map(
-            (k,v) -> KeyValue.pair(k.key().toString(), v.toString()))
+            (k,v) -> KeyValue.pair(k.key().toString(), prep_timestamp(v.toString())))
         .peek((k,v) -> {
             peek_message(k, v, "W1", writeApi, true);
+        }).map((k,v)->{
+            String[] v_split = v.split("\\|");
+            return KeyValue.pair(v_split[0], v_split[0]+"|-"+v_split[1]);
+        })
+        .to("WtotRest", Produced.with(Serdes.String(), Serdes.String()));
+
+        
+        inputStreamEtotRest
+        .mapValues((v)-> Double.parseDouble(v.split("\\|")[1]))
+        .groupByKey(Grouped.with(Serdes.String(), Serdes.Double()))
+        .reduce(Double::sum, Materialized
+        .<String, Double, KeyValueStore<Bytes, byte[]>>as("EtotRest")
+        .withKeySerde(Serdes.String())
+        .withValueSerde(Serdes.Double())
+        .withLoggingDisabled() // disable caching and logging
+        )
+        .toStream()
+        .peek((k,v)->{
+            String temp = k+"|"+v;
+            peek_message(k, temp, "ETOT_REST", writeApi, true);
+        });
+
+        inputStreamWtotRest
+        .mapValues((v)-> Double.parseDouble(v.split("\\|")[1]))
+        .groupByKey(Grouped.with(Serdes.String(), Serdes.Double()))
+        .reduce(Double::sum, Materialized
+        .<String, Double, KeyValueStore<Bytes, byte[]>>as("WtotRest")
+        .withKeySerde(Serdes.String())
+        .withValueSerde(Serdes.Double())
+        .withLoggingDisabled() // disable caching and logging
+        )
+        .toStream()
+        .peek((k,v)->{
+            String temp = k+"|"+v;
+            peek_message(k, temp, "WTOT_REST", writeApi, true);
         });
 
     }
@@ -513,5 +579,15 @@ public class App {
             else{
                 influxapi.writeRecord("info_sheesh_bucket", "info_sys_ntua", WritePrecision.MS, measurement+",location=raw"+" value="+parts[1]+" "+Timestamp.valueOf(date).getTime());
             }
+    }
+
+    public static String prep_timestamp(String value){
+        String[] parts = value.split("\\|");
+        String timestamp = parts[0];
+        LocalDateTime dateTime = LocalDateTime.parse(parts[0].replace(" ", "T"));
+        LocalDateTime zeroedDateTime = dateTime.withHour(0).withMinute(0).withSecond(0);
+        String zeroedTimestamp = zeroedDateTime.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"));
+
+        return zeroedTimestamp+"|"+parts[1];
     }
 }

@@ -36,6 +36,9 @@ docker exec -it kafka kafka-topics.sh --create --if-not-exists --bootstrap-serve
 docker exec -it kafka kafka-topics.sh --create --if-not-exists --bootstrap-server localhost:9092 --replication-factor 1 --partitions 1 --topic W1
 docker exec -it kafka kafka-topics.sh --create --if-not-exists --bootstrap-server localhost:9092 --replication-factor 1 --partitions 1 --topic Wtot
 docker exec -it kafka kafka-topics.sh --create --if-not-exists --bootstrap-server localhost:9092 --replication-factor 1 --partitions 1 --topic Mov1
+docker exec -it kafka kafka-topics.sh --create --if-not-exists --bootstrap-server localhost:9092 --replication-factor 1 --partitions 1 --topic EtotRest
+docker exec -it kafka kafka-topics.sh --create --if-not-exists --bootstrap-server localhost:9092 --replication-factor 1 --partitions 1 --topic WtotRest
+
 
 # check if kafka container started, else restart the container
 if [ ! "$(docker ps | grep kafka)" ]; then
@@ -57,6 +60,8 @@ if [ ! "$(docker ps | grep kafka)" ]; then
     docker exec -it kafka kafka-topics.sh --create --if-not-exists --bootstrap-server localhost:9092 --replication-factor 1 --partitions 1 --topic W1
     docker exec -it kafka kafka-topics.sh --create --if-not-exists --bootstrap-server localhost:9092 --replication-factor 1 --partitions 1 --topic Wtot
     docker exec -it kafka kafka-topics.sh --create --if-not-exists --bootstrap-server localhost:9092 --replication-factor 1 --partitions 1 --topic Mov1
+    docker exec -it kafka kafka-topics.sh --create --if-not-exists --bootstrap-server localhost:9092 --replication-factor 1 --partitions 1 --topic EtotRest
+    docker exec -it kafka kafka-topics.sh --create --if-not-exists --bootstrap-server localhost:9092 --replication-factor 1 --partitions 1 --topic WtotRest
 
 fi
 
